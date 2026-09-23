@@ -1,0 +1,248 @@
+package com.freerdp.feature.mouse
+
+import android.os.Handler
+import android.os.Looper
+import android.view.MotionEvent
+import kotlin.math.hypot
+
+/**
+ * Listener interface for disambiguated gesture events.
+ */
+interface GestureEventListener {
+    fun onSingleTap(screenX: Float, screenY: Float) {}
+    fun onDoubleTap(screenX: Float, screenY: Float) {}
+    fun onLongPress(screenX: Float, screenY: Float) {}
+    fun onPan(deltaX: Float, deltaY: Float) {}
+    fun onPanEnd() {}
+    fun onPinchZoom(focusX: Float, focusY: Float, scaleFactor: Float) {}
+    fun onTwoFingerScroll(deltaX: Float, deltaY: Float) {}
+    fun onCancel() {}
+}
+
+/**
+ * Gesture disambiguation engine with Anti-Spurious Click Multi-Touch Latch.
+ *
+ * Prevents accidental tap/clicks when releasing fingers from multi-touch gestures (pinch-to-zoom, two-finger pan).
+ * Latch activates as soon as pointerCount > 1 and is held until all fingers leave the screen (ACTION_UP).
+ */
+class GestureDisambiguationEngine(
+    var touchSlop: Float = 16f,
+    var doubleTapSlop: Float = 48f,
+    var longPressTimeoutMs: Long = 500L,
+    var doubleTapTimeoutMs: Long = 300L,
+    private val handler: Handler? = try {
+        Handler(Looper.getMainLooper())
+    } catch (_: Exception) {
+        null
+    },
+    var listener: GestureEventListener? = null
+) {
+    var multiTouchLatch: Boolean = false
+        private set
+
+    val isMultiTouchLatched: Boolean
+        get() = multiTouchLatch
+
+    var isPanning: Boolean = false
+        private set
+
+    var isLongPressTriggered: Boolean = false
+        private set
+
+    private var downX: Float = 0f
+    private var downY: Float = 0f
+    private var lastX: Float = 0f
+    private var lastY: Float = 0f
+
+    private var lastTapX: Float = 0f
+    private var lastTapY: Float = 0f
+    private var lastTapTime: Long = 0L
+
+    private var prevSpan: Float = 0f
+    private var prevMidX: Float = 0f
+    private var prevMidY: Float = 0f
+
+    private val longPressRunnable = Runnable {
+        if (!multiTouchLatch && !isPanning && !isLongPressTriggered) {
+            isLongPressTriggered = true
+            listener?.onLongPress(downX, downY)
+        }
+    }
+
+    private fun cancelLongPress() {
+        handler?.removeCallbacks(longPressRunnable)
+    }
+
+    fun onTouchEvent(event: MotionEvent): Boolean {
+        val action = event.actionMasked
+
+        // Multi-touch latch activation check: pointerCount > 1 at any moment
+        if (event.pointerCount > 1) {
+            multiTouchLatch = true
+            cancelLongPress()
+        }
+
+        when (action) {
+            MotionEvent.ACTION_DOWN -> {
+                multiTouchLatch = false
+                isPanning = false
+                isLongPressTriggered = false
+                downX = event.x
+                downY = event.y
+                lastX = event.x
+                lastY = event.y
+
+                cancelLongPress()
+                handler?.postDelayed(longPressRunnable, longPressTimeoutMs)
+                return true
+            }
+
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                multiTouchLatch = true
+                cancelLongPress()
+                if (event.pointerCount == 2) {
+                    val x0 = event.getX(0)
+                    val y0 = event.getY(0)
+                    val x1 = event.getX(1)
+                    val y1 = event.getY(1)
+                    prevSpan = hypot(x0 - x1, y0 - y1)
+                    prevMidX = (x0 + x1) / 2f
+                    prevMidY = (y0 + y1) / 2f
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount == 1) {
+                    if (!multiTouchLatch) {
+                        val currentX = event.x
+                        val currentY = event.y
+                        val deltaFromDown = hypot(currentX - downX, currentY - downY)
+
+                        if (!isPanning && deltaFromDown > touchSlop) {
+                            isPanning = true
+                            cancelLongPress()
+                        }
+
+                        if (isPanning) {
+                            val dx = currentX - lastX
+                            val dy = currentY - lastY
+                            listener?.onPan(dx, dy)
+                        }
+
+                        lastX = currentX
+                        lastY = currentY
+                    }
+                } else if (event.pointerCount >= 2) {
+                    multiTouchLatch = true
+                    cancelLongPress()
+
+                    val x0 = event.getX(0)
+                    val y0 = event.getY(0)
+                    val x1 = event.getX(1)
+                    val y1 = event.getY(1)
+
+                    val currentSpan = hypot(x0 - x1, y0 - y1)
+                    val currentMidX = (x0 + x1) / 2f
+                    val currentMidY = (y0 + y1) / 2f
+
+                    if (prevSpan > 0f) {
+                        val scaleFactor = currentSpan / prevSpan
+                        listener?.onPinchZoom(currentMidX, currentMidY, scaleFactor)
+                    }
+
+                    if (prevMidX != 0f || prevMidY != 0f) {
+                        val scrollDx = currentMidX - prevMidX
+                        val scrollDy = currentMidY - prevMidY
+                        listener?.onTwoFingerScroll(scrollDx, scrollDy)
+                    }
+
+                    prevSpan = currentSpan
+                    prevMidX = currentMidX
+                    prevMidY = currentMidY
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_POINTER_UP -> {
+                // One finger lifted during multi-touch; latch MUST remain active!
+                multiTouchLatch = true
+                cancelLongPress()
+                prevSpan = 0f
+                prevMidX = 0f
+                prevMidY = 0f
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
+                cancelLongPress()
+                val upX = event.x
+                val upY = event.y
+                val eventTime = event.eventTime
+
+                if (multiTouchLatch) {
+                    // Crucial: Suppress spurious clicks on multi-finger lift
+                    val wasPanning = isPanning
+                    multiTouchLatch = false
+                    isPanning = false
+                    isLongPressTriggered = false
+                    prevSpan = 0f
+                    prevMidX = 0f
+                    prevMidY = 0f
+                    // Tap suppression must NOT starve the pan session: if the latch
+                    // released an active pan, its consumers still get the end-of-pan.
+                    if (wasPanning) {
+                        listener?.onPanEnd()
+                    }
+                    return true
+                }
+
+                if (isPanning) {
+                    isPanning = false
+                    listener?.onPanEnd()
+                    return true
+                }
+
+                if (isLongPressTriggered) {
+                    isLongPressTriggered = false
+                    return true
+                }
+
+                // Stationary single finger tap: check for double tap
+                val timeSinceLastTap = eventTime - lastTapTime
+                val distFromLastTap = hypot(upX - lastTapX, upY - lastTapY)
+
+                if (lastTapTime > 0L && timeSinceLastTap <= doubleTapTimeoutMs && distFromLastTap <= doubleTapSlop) {
+                    lastTapTime = 0L
+                    listener?.onDoubleTap(upX, upY)
+                } else {
+                    lastTapTime = eventTime
+                    lastTapX = upX
+                    lastTapY = upY
+                    listener?.onSingleTap(upX, upY)
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                cancelLongPress()
+                multiTouchLatch = false
+                isPanning = false
+                isLongPressTriggered = false
+                prevSpan = 0f
+                prevMidX = 0f
+                prevMidY = 0f
+                listener?.onCancel()
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * For deterministic unit testing without Handler timing.
+     */
+    fun triggerPendingLongPress() {
+        longPressRunnable.run()
+    }
+}

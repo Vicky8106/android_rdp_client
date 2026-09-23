@@ -1,0 +1,21 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+.kotlin/
+local.properties
+captures/
+.externalNativeBuild
+.cxx
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Verification logs (ephemeral)
+*.log
+baseline_exit.txt
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,163 @@
+package com.freerdp.feature.session.toolbar
+
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+enum class ToolbarState {
+    COLLAPSED,
+    EXPANDED
+}
+
+enum class ToolbarAction {
+    DISCONNECT,
+    TOGGLE_KEYBOARD,
+    TOGGLE_MOUSE_OVERLAY,
+    SWITCH_RESOLUTION,
+    TOGGLE_TELEMETRY_HUD,
+    TOGGLE_MODIFIER_BAR
+}
+
+/**
+ * Collapsible quick-action toolbar with a 4-second inactivity auto-collapse timer,
+ * manual pin/unpin, one-tap action dispatch, and deterministic collapse on session loss.
+ *
+ * Timer semantics: every user interaction while expanded (or every expand) (re)arms a
+ * single auto-collapse job for [inactivityTimeoutMs]. Arm/disarm are guarded by a
+ * generation counter checked under the instance monitor, so a stale timer that already
+ * completed its delay can never collapse a toolbar that was re-expanded in the meantime,
+ * and a pinned toolbar never auto-collapses.
+ */
+class QuickActionToolbarFSM(
+    private val inactivityTimeoutMs: Long = 4000L,
+    private val coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val onActionCallback: ((ToolbarAction) -> Unit)? = null
+) {
+
+    private val _state = MutableStateFlow(ToolbarState.COLLAPSED)
+    val state: StateFlow<ToolbarState> = _state.asStateFlow()
+
+    private val _pinned = MutableStateFlow(false)
+    val pinned: StateFlow<Boolean> = _pinned.asStateFlow()
+
+    private val _actionEvents = MutableSharedFlow<ToolbarAction>(extraBufferCapacity = 16)
+    val actionEvents: SharedFlow<ToolbarAction> = _actionEvents.asSharedFlow()
+
+    private var autoCollapseJob: Job? = null
+
+    // Incremented whenever a timer is armed or cancelled; only the job holding the
+    // current generation may collapse the toolbar when its delay elapses.
+    private var timerGeneration = 0
+
+    val isExpanded: Boolean get() = _state.value == ToolbarState.EXPANDED
+    val isCollapsed: Boolean get() = _state.value == ToolbarState.COLLAPSED
+    val isPinned: Boolean get() = _pinned.value
+
+    @Synchronized
+    fun expand() {
+        _state.value = ToolbarState.EXPANDED
+        startAutoCollapseTimer()
+    }
+
+    @Synchronized
+    fun collapse() {
+        cancelAutoCollapseTimer()
+        _state.value = ToolbarState.COLLAPSED
+    }
+
+    @Synchronized
+    fun toggle() {
+        if (_state.value == ToolbarState.EXPANDED) {
+            collapse()
+        } else {
+            expand()
+        }
+    }
+
+    /**
+     * Pins the toolbar open: it becomes/stays expanded and the inactivity
+     * timer is disarmed, so it will not auto-collapse until [unpin].
+     */
+    @Synchronized
+    fun pin() {
+        _pinned.value = true
+        cancelAutoCollapseTimer()
+        _state.value = ToolbarState.EXPANDED
+    }
+
+    /**
+     * Removes the pin. If the toolbar is expanded, the 4s inactivity timer is
+     * re-armed from this moment.
+     */
+    @Synchronized
+    fun unpin() {
+        _pinned.value = false
+        if (_state.value == ToolbarState.EXPANDED) {
+            startAutoCollapseTimer()
+        }
+    }
+
+    /**
+     * Deterministic collapse when the RDP session is lost/torn down. Runs
+     * unconditionally (even for a pinned toolbar) and cancels the auto-collapse
+     * timer so no stale job fires later. The pin preference itself is preserved
+     * for the next session.
+     */
+    @Synchronized
+    fun onSessionLost() {
+        cancelAutoCollapseTimer()
+        _state.value = ToolbarState.COLLAPSED
+    }
+
+    @Synchronized
+    fun onTouch() {
+        if (_state.value == ToolbarState.EXPANDED) {
+            startAutoCollapseTimer()
+        }
+    }
+
+    fun resetTimer() {
+        onTouch()
+    }
+
+    @Synchronized
+    fun triggerAction(action: ToolbarAction) {
+        if (_state.value == ToolbarState.EXPANDED) {
+            startAutoCollapseTimer()
+        }
+        _actionEvents.tryEmit(action)
+        onActionCallback?.invoke(action)
+    }
+
+    @Synchronized
+    private fun startAutoCollapseTimer() {
+        autoCollapseJob?.cancel()
+        val generation = ++timerGeneration
+        autoCollapseJob = coroutineScope.launch(dispatcher) {
+            delay(inactivityTimeoutMs)
+            synchronized(this@QuickActionToolbarFSM) {
+                if (generation == timerGeneration && !_pinned.value) {
+                    _state.value = ToolbarState.COLLAPSED
+                }
+            }
+        }
+    }
+
+    @Synchronized
+    private fun cancelAutoCollapseTimer() {
+        autoCollapseJob?.cancel()
+        autoCollapseJob = null
+        timerGeneration++
+    }
+}
