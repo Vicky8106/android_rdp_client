@@ -308,7 +308,7 @@ class FramePacerTest {
 
     @Test
     fun testVsyncStaleFrameDroppedAtCallback() {
-        val pacer = FramePacer(maxFrameAgeNanos = 250_000_000L, vsyncPeriodNanos = 1_000_000L)
+        val pacer = FramePacer(maxFrameAgeNanos = 250_000_000L, vsyncPeriodNanos = 1_000_000L, retainInitialFrame = false)
         val bitmap = mockk<Bitmap>()
         pacer.onFrameDecoded(bitmap, timestampNanos = 0L)
 
@@ -318,6 +318,21 @@ class FramePacerTest {
         assertEquals(1L, pacer.totalStaleDropped)
         assertEquals(0L, pacer.totalVsyncBlits)
         assertFalse(pacer.hasPendingFrame)
+    }
+
+    @Test
+    fun testVsyncRetainsInitialFrameWhenOlderThanThreshold() {
+        val pacer = FramePacer(maxFrameAgeNanos = 250_000_000L, vsyncPeriodNanos = 1_000_000L, retainInitialFrame = true)
+        val bitmap = mockk<Bitmap>()
+        pacer.onFrameDecoded(bitmap, timestampNanos = 0L)
+
+        val blit = pacer.acquireFrameForVsync(250_000_001L)
+
+        assertNotNull("Initial frame must be retained and presented despite staleness", blit)
+        assertSame(bitmap, blit)
+        assertEquals(0L, pacer.totalStaleDropped)
+        assertEquals(1L, pacer.totalVsyncBlits)
+        assertEquals(1L, pacer.totalRendered)
     }
 
     @Test

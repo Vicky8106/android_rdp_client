@@ -201,31 +201,45 @@ class FloatingMouseOverlayView @JvmOverloads constructor(
         setupButtonListeners()
     }
 
+    private fun getTargetScreenPosition(): Pair<Float, Float> {
+        val pt = mouseController?.cursorScreenPosition
+        return if (pt != null) {
+            pt.x to pt.y
+        } else {
+            currentScreenX to currentScreenY
+        }
+    }
+
     private fun setupButtonListeners() {
         btnLeftClick.setOnClickListener {
-            mouseController?.handleLeftClick(currentScreenX, currentScreenY)
+            val (x, y) = getTargetScreenPosition()
+            mouseController?.handleLeftClick(x, y)
         }
 
         btnRightClick.setOnClickListener {
-            mouseController?.handleRightClick(currentScreenX, currentScreenY)
+            val (x, y) = getTargetScreenPosition()
+            mouseController?.handleRightClick(x, y)
         }
 
         btnDragToggle.setOnClickListener {
             isDragLocked = !isDragLocked
             btnDragToggle.text = if (isDragLocked) "Drag: ON" else "Drag: Off"
+            val (x, y) = getTargetScreenPosition()
             if (isDragLocked) {
-                mouseController?.handleDragStart(currentScreenX, currentScreenY)
+                mouseController?.handleDragStart(x, y)
             } else {
-                mouseController?.handleDragEnd(currentScreenX, currentScreenY)
+                mouseController?.handleDragEnd(x, y)
             }
         }
 
         btnScrollUp.setOnClickListener {
-            mouseController?.handleScroll(currentScreenX, currentScreenY, 1.0f)
+            val (x, y) = getTargetScreenPosition()
+            mouseController?.handleScroll(x, y, 1.0f)
         }
 
         btnScrollDown.setOnClickListener {
-            mouseController?.handleScroll(currentScreenX, currentScreenY, -1.0f)
+            val (x, y) = getTargetScreenPosition()
+            mouseController?.handleScroll(x, y, -1.0f)
         }
 
         btnTouchpadToggle.setOnClickListener {

@@ -217,6 +217,27 @@ class SessionViewModelTest {
         assertTrue(h.settings.current.trustedCertificates.isEmpty())
     }
 
+    @Test
+    fun certificateRequestCancelledOnConfirmExitClearsPromptAndUnblocks() = runTest {
+        val mock = MockRdpEngine().apply { simulateCertVerification = true }
+        val h = sessionHarness(
+            context, testProfile(), mock = mock,
+            connectDispatcher = Dispatchers.IO
+        )
+        h.vm.ensureStarted("profile-1")
+        pumpAll()
+        awaitUntil(5000, "certificate prompt appears") { h.vm.certificateRequest.value != null }
+
+        // User confirms exit while TOFU dialog is awaiting decision
+        h.vm.confirmExit()
+        pumpAll()
+
+        awaitUntil(5000, "certificate prompt cleared on exit") {
+            h.vm.certificateRequest.value == null
+        }
+        assertTrue(h.vm.phase.value is SessionPhase.Idle || h.vm.phase.value is SessionPhase.Failed)
+    }
+
     // ------------------------------------------------------------ modifiers
 
     @Test

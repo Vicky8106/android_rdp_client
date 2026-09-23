@@ -131,4 +131,30 @@ class SessionGraphicsTest {
         pumpAll()
         assertEquals(42L, h.telemetry.getSnapshot().rttMs)
     }
+
+    @Test
+    fun fullFramebufferDirtyRectExtractionExtractsAtOffset() = runTest {
+        val h = sessionHarness(context, testProfile())
+        h.vm.ensureStarted("profile-1")
+        pumpAll()
+
+        // Full framebuffer update: pixels in the dirty rect region (20..29, 30..39) are YELLOW, rest BLACK.
+        val fullFb = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.BLACK)
+            for (px in 20 until 30) {
+                for (py in 30 until 40) {
+                    setPixel(px, py, Color.YELLOW)
+                }
+            }
+        }
+
+        h.mock.triggerGraphicsUpdate(fullFb, 20, 30, 10, 10)
+
+        val frame = h.vm.currentFrame()
+        assertNotNull("backing frame allocated", frame)
+        assertEquals(Color.YELLOW, frame!!.getPixel(20, 30))
+        assertEquals(Color.YELLOW, frame.getPixel(29, 39))
+        assertEquals(Color.BLACK, frame.getPixel(0, 0))
+        assertEquals(Color.BLACK, frame.getPixel(19, 29))
+    }
 }

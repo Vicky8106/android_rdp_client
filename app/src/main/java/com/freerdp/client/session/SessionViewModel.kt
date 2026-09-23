@@ -94,7 +94,7 @@ class SessionViewModel(
     private val toolbarDispatcher: CoroutineDispatcher? = null,
     private val layoutDebounceMs: Long = 250L,
     private val dropSettleDelayMs: Long = 250L,
-    private val certificateDecisionTimeoutMs: Long = 60_000L,
+    private val certificateDecisionTimeoutMs: Long = 25_000L,
     private val initialProfileId: String? = null
 ) : ViewModel() {
 
@@ -265,11 +265,13 @@ class SessionViewModel(
         }
 
         override fun onConnectionFailure(errorCode: Int, message: String) {
+            cancelPendingCertificateRequest()
             pendingFailure = errorCode to message
             postPhase(SessionEvent.ConnectionFailed(errorCode, message))
         }
 
         override fun onDisconnected() {
+            cancelPendingCertificateRequest()
             val engineState = engine.connectionState.value
             if (engineState is RdpConnectionState.Failed) {
                 pendingFailure = engineState.errorCode to engineState.message
@@ -319,6 +321,19 @@ class SessionViewModel(
             if (decision) settings.trustCertificate(host, fingerprint)
             return decision
         }
+    }
+
+    /** Completes the pending TOFU decision with false to unblock any blocked native thread. */
+    fun cancelPendingCertificateRequest() {
+        val request = _certificateRequest.value ?: return
+        request.decision.complete(false)
+        _certificateRequest.value = null
+    }
+
+    /** Explicit disconnect request; ensures pending certificate requests are cancelled. */
+    fun disconnect() {
+        cancelPendingCertificateRequest()
+        confirmExit()
     }
 
     /** Completes the pending TOFU decision; called by the certificate dialog. */
@@ -557,6 +572,7 @@ class SessionViewModel(
 
     /** Manual retry from the failure screen: full reload of profile + password flow. */
     fun retry() {
+        cancelPendingCertificateRequest()
         recoveryCancelled = false
         pendingFailure = null
         phaseKnown = false
@@ -574,6 +590,7 @@ class SessionViewModel(
      * guard so the disconnect caused by the cancellation cannot re-trigger a retry.
      */
     fun cancelReconnect() {
+        cancelPendingCertificateRequest()
         recoveryCancelled = true
         reconnectManager.cancelReconnect()
         _userMessage.value = "Automatic reconnection cancelled"
@@ -589,6 +606,7 @@ class SessionViewModel(
         userExitRequested = true
         recoveryCancelled = true
         _exitConfirmVisible.value = false
+        cancelPendingCertificateRequest()
         toolbar.onSessionLost() // the session is over — collapse controls deterministically
         sessionScope.launch {
             runCatching { reconnectManager.cancelReconnect() }
@@ -604,6 +622,7 @@ class SessionViewModel(
 
     /** Called by the container when the session UI is permanently dismissed. */
     fun terminate() {
+        cancelPendingCertificateRequest()
         networkMonitor.stop()
         clipboard.stopListening()
         engine.setEventListener(null)
@@ -719,12 +738,14 @@ class SessionViewModel(
             ensureBackingLocked(x + width, y + height)
             val backing = backingBitmap ?: return
             val canvas = Canvas(backing)
-            val srcW = minOf(width, tile.width)
-            val srcH = minOf(height, tile.height)
+            val srcX = if (tile.width > width || tile.height > height) x else 0
+            val srcY = if (tile.height > height || tile.width > width) y else 0
+            val srcW = minOf(width, tile.width - srcX)
+            val srcH = minOf(height, tile.height - srcY)
             if (srcW <= 0 || srcH <= 0) return
             canvas.drawBitmap(
                 tile,
-                Rect(0, 0, srcW, srcH),
+                Rect(srcX, srcY, srcX + srcW, srcY + srcH),
                 Rect(x, y, x + srcW, y + srcH),
                 null
             )
@@ -756,7 +777,6 @@ class SessionViewModel(
                 RectF(0f, 0f, copyW.toFloat(), copyH.toFloat()),
                 null
             )
-            current.recycle()
         }
         backingBitmap = next
     }

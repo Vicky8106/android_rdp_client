@@ -22,9 +22,11 @@ class HapticMouseController(
 
     val inner: DefaultMouseController get() = delegate
 
-    val isTouchpadMode: Boolean get() = delegate.isTouchpadMode
+    override val isTouchpadMode: Boolean get() = delegate.isTouchpadMode
     val isCursorVisible: Boolean get() = delegate.isCursorVisible
-    val isDragging: Boolean get() = delegate.isDragging
+    override val isDragging: Boolean get() = delegate.isDragging
+    override val cursorScreenPosition: android.graphics.PointF get() = delegate.cursorScreenPosition
+    override val virtualCursorPosition: android.graphics.PointF get() = delegate.virtualCursorPosition
 
     private fun tick(style: Int = HapticFeedbackConstants.KEYBOARD_TAP) {
         val target = hapticTarget ?: return

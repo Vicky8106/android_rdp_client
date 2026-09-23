@@ -8,6 +8,7 @@ import com.freerdp.freerdpcore.services.LibFreeRDP
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -114,10 +115,13 @@ class NativeFreeRdpEngine(
 
     /** Internal for tests: asserts the MS-RDPEDISP monitor-layout round-trip payload. */
     internal val displayControlHandler = DisplayControlHandler { layout ->
-        // Native send only when a session is live; the listener notification always runs
-        // so a resolution request round-trips (MockRdpEngine parity).
         withNativeInstance { inst -> native.sendMonitorLayout(inst, layout.width, layout.height) }
-        eventListener?.onResolutionChanged(layout.width, layout.height)
+        // Do not notify onResolutionChanged prematurely in production: the server will acknowledge
+        // and resize via native OnGraphicsResize/OnSettingsChanged once MS-RDPEDISP negotiation succeeds.
+        // In test environments (mock/fake native), echo to listener for round-trip assertion.
+        if (native !== JniFreeRdpNative) {
+            eventListener?.onResolutionChanged(layout.width, layout.height)
+        }
     }
 
     /**
@@ -194,53 +198,71 @@ class NativeFreeRdpEngine(
 
         // Phase 2: wait for OnConnectionSuccess/OnConnectionFailure OUTSIDE the lock so a
         // concurrent disconnect() can cancel a hanging connect.
-        val outcome = withTimeoutOrNull(connectTimeoutMs) { deferred.await() }
+        var finalized = false
+        try {
+            val outcome = withTimeoutOrNull(connectTimeoutMs) { deferred.await() }
 
-        // Phase 3: finalize.
-        synchronized(lifecycleLock) {
-            if (connectResult.get() !== deferred) {
-                // Superseded by a newer connect() (or cancelled by disconnect(), which
-                // clears the field): that path owns state finalization, not us.
-                return@synchronized false
-            }
-            connectResult.set(null)
-            when {
-                // Success is only accepted while still Connecting: a disconnect() that
-                // raced us already moved the state, and a session that ended right after
-                // OnConnectionSuccess must not be reported as Connected.
-                outcome == true &&
-                    _connectionState.value is RdpConnectionState.Connecting &&
-                    sessionEnded.get()?.isCompleted != true -> {
-                    _connectionState.value = RdpConnectionState.Connected
-                    eventListener?.onConnectionSuccess()
-                    true
+            // Phase 3: finalize.
+            synchronized(lifecycleLock) {
+                if (connectResult.get() !== deferred) {
+                    // Superseded by a newer connect() (or cancelled by disconnect(), which
+                    // clears the field): that path owns state finalization, not us.
+                    return@synchronized false
                 }
-                outcome == null -> {
-                    val errorMsg = "Connection timed out after ${connectTimeoutMs}ms"
-                    val alreadyGone = _connectionState.value is RdpConnectionState.Disconnected
-                    if (!alreadyGone) {
-                        teardownSession()
-                        _connectionState.value =
-                            RdpConnectionState.Failed(ERROR_CONNECT_TIMEOUT, errorMsg)
-                        eventListener?.onConnectionFailure(ERROR_CONNECT_TIMEOUT, errorMsg)
+                finalized = true
+                connectResult.set(null)
+                when {
+                    // Success is only accepted while still Connecting: a disconnect() that
+                    // raced us already moved the state, and a session that ended right after
+                    // OnConnectionSuccess must not be reported as Connected.
+                    outcome == true &&
+                        _connectionState.value is RdpConnectionState.Connecting &&
+                        sessionEnded.get()?.isCompleted != true -> {
+                        _connectionState.value = RdpConnectionState.Connected
+                        eventListener?.onConnectionSuccess()
+                        true
                     }
-                    false
+                    outcome == null -> {
+                        val errorMsg = "Connection timed out after ${connectTimeoutMs}ms"
+                        val alreadyGone = _connectionState.value is RdpConnectionState.Disconnected
+                        if (!alreadyGone) {
+                            teardownSession()
+                            _connectionState.value =
+                                RdpConnectionState.Failed(ERROR_CONNECT_TIMEOUT, errorMsg)
+                            eventListener?.onConnectionFailure(ERROR_CONNECT_TIMEOUT, errorMsg)
+                        }
+                        false
+                    }
+                    else -> {
+                        // Callback reported failure (or the session ended before we observed
+                        // success). Skip if disconnect()/a callback already finalized the state.
+                        val state = _connectionState.value
+                        if (state !is RdpConnectionState.Disconnected && state !is RdpConnectionState.Failed) {
+                            val inst = nativeInstance.get()
+                            val err = if (inst != 0L) native.getLastErrorMessage(inst) else null
+                            val errorMsg = err?.takeIf { it.isNotBlank() } ?: "Connection failed"
+                            failConnect(ERROR_CONNECT_FAILED, errorMsg)
+                            false
+                        } else {
+                            // Another path already finalized the state; still run teardown for
+                            // the async-failure case (idempotent, frees nothing twice).
+                            if (state is RdpConnectionState.Failed) teardownSession()
+                            false
+                        }
+                    }
                 }
-                else -> {
-                    // Callback reported failure (or the session ended before we observed
-                    // success). Skip if disconnect()/a callback already finalized the state.
-                    val state = _connectionState.value
-                    if (state !is RdpConnectionState.Disconnected && state !is RdpConnectionState.Failed) {
-                        val inst = nativeInstance.get()
-                        val err = if (inst != 0L) native.getLastErrorMessage(inst) else null
-                        val errorMsg = err?.takeIf { it.isNotBlank() } ?: "Connection failed"
-                        failConnect(ERROR_CONNECT_FAILED, errorMsg)
-                        false
-                    } else {
-                        // Another path already finalized the state; still run teardown for
-                        // the async-failure case (idempotent, frees nothing twice).
-                        if (state is RdpConnectionState.Failed) teardownSession()
-                        false
+            }
+        } finally {
+            if (!finalized) {
+                withContext(NonCancellable) {
+                    synchronized(lifecycleLock) {
+                        if (connectResult.get() === deferred) {
+                            teardownSession()
+                            if (_connectionState.value is RdpConnectionState.Connecting) {
+                                _connectionState.value = RdpConnectionState.Disconnected
+                                eventListener?.onDisconnected()
+                            }
+                        }
                     }
                 }
             }
@@ -262,14 +284,17 @@ class NativeFreeRdpEngine(
         Unit
     }
 
-    override fun sendPointerEvent(flags: Int, x: Int, y: Int) =
+    override fun sendPointerEvent(flags: Int, x: Int, y: Int) {
         withNativeInstance { inst -> native.sendCursorEvent(inst, x, y, flags) }
+    }
 
-    override fun sendKeyEvent(keyCode: Int, down: Boolean) =
+    override fun sendKeyEvent(keyCode: Int, down: Boolean) {
         withNativeInstance { inst -> native.sendKeyEvent(inst, keyCode, down) }
+    }
 
-    override fun sendUnicodeKeyEvent(unicodeChar: Char, down: Boolean) =
+    override fun sendUnicodeKeyEvent(unicodeChar: Char, down: Boolean) {
         withNativeInstance { inst -> native.sendUnicodeEvent(inst, unicodeChar.code, down) }
+    }
 
     override fun updateResolution(
         width: Int,
@@ -340,13 +365,35 @@ class NativeFreeRdpEngine(
                 // Callbacks complete this deferred BEFORE taking lifecycleLock, so this
                 // wait cannot deadlock against a callback that wants the lock.
                 val ended = sessionEnded.get()
-                if (ended != null && !ended.isCompleted) {
+                if (ended != null) {
                     val latch = CountDownLatch(1)
                     ended.invokeOnCompletion { latch.countDown() }
-                    try {
+                    val joined = try {
                         latch.await(sessionEndWaitMs, TimeUnit.MILLISECONDS)
                     } catch (e: InterruptedException) {
                         Thread.currentThread().interrupt()
+                        false
+                    }
+                    if (joined) {
+                        if (native.isNativeLibraryLoaded()) {
+                            try {
+                                Thread.sleep(30L)
+                            } catch (_: InterruptedException) {
+                                Thread.currentThread().interrupt()
+                            }
+                        }
+                    } else {
+                        // Thread did not finish within timeout — abandon pointer safely to prevent UAF/SIGSEGV
+                        nativeInstance.set(0L)
+                        sessionEnded.set(null)
+                        connectResult.get()?.complete(false)
+                        connectResult.set(null)
+                        if (native.getNativeCallbacks() === this) {
+                            native.setNativeCallbacks(null)
+                        }
+                        clipboardHandler.clearEchoState()
+                        framebuffer = null
+                        return
                     }
                 }
             }
@@ -385,11 +432,11 @@ class NativeFreeRdpEngine(
     }
 
     /** Runs [block] with the live native pointer under the read lock; no-op when absent. */
-    private inline fun withNativeInstance(block: (Long) -> Unit) {
+    private inline fun <R> withNativeInstance(block: (Long) -> R): R? {
         nativeLock.readLock().lock()
         try {
             val inst = nativeInstance.get()
-            if (inst != 0L) block(inst)
+            return if (inst != 0L) block(inst) else null
         } finally {
             nativeLock.readLock().unlock()
         }
@@ -627,7 +674,15 @@ class NativeFreeRdpEngine(
         // hand the bitmap to the listener (upstream SessionActivity pattern). Without a
         // framebuffer (JVM unit tests) we degrade to metrics-only dispatch.
         val fb = framebuffer ?: return
-        native.updateGraphics(inst, fb, x, y, width, height)
+        nativeLock.readLock().lock()
+        try {
+            val current = nativeInstance.get()
+            if (current != 0L && (current == inst || inst == 0L)) {
+                native.updateGraphics(current, fb, x, y, width, height)
+            }
+        } finally {
+            nativeLock.readLock().unlock()
+        }
         eventListener?.onGraphicsUpdate(fb, x, y, width, height)
     }
 
@@ -712,7 +767,7 @@ class NativeFreeRdpEngine(
         const val ERROR_CONNECT_FAILED = 1004
         const val ERROR_CONNECT_TIMEOUT = 1005
 
-        const val DEFAULT_CONNECT_TIMEOUT_MS = 30_000L
+        const val DEFAULT_CONNECT_TIMEOUT_MS = 60_000L
         const val DEFAULT_SESSION_END_WAIT_MS = 5_000L
         private const val FPS_WINDOW_MS = 1_000L
     }

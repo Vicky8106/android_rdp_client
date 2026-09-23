@@ -86,6 +86,13 @@ class RemoteCanvasView @JvmOverloads constructor(
             val controller = mouseController
             if (controller != null && controller.isTouchpadMode) {
                 controller.handleTouchpadMove(deltaX, deltaY)
+            } else if (controller != null && controller.isDragging) {
+                val cursor = controller.inner.virtualCursorPosition
+                val newDesktopX = cursor.x + deltaX / transformer.scale
+                val newDesktopY = cursor.y + deltaY / transformer.scale
+                val screenPt = transformer.desktopToScreen(newDesktopX, newDesktopY)
+                controller.handleDragMove(screenPt.x, screenPt.y)
+                invalidate()
             } else {
                 transformer.applyPan(deltaX, deltaY)
                 userHasAdjustedZoom = true

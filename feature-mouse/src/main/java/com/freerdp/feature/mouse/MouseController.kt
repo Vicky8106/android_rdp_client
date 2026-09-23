@@ -9,6 +9,10 @@ import kotlin.math.max
  * Interface contract for mouse interactions as defined in PROJECT.md.
  */
 interface MouseController {
+    val isTouchpadMode: Boolean get() = false
+    val isDragging: Boolean get() = false
+    val cursorScreenPosition: PointF? get() = null
+    val virtualCursorPosition: PointF? get() = null
     fun handleLeftClick(screenX: Float, screenY: Float)
     fun handleRightClick(screenX: Float, screenY: Float)
     fun handleDoubleClick(screenX: Float, screenY: Float)
@@ -29,13 +33,13 @@ class DefaultMouseController(
     private val transformer: CoordinateTransformer
 ) : MouseController {
 
-    var isTouchpadMode: Boolean = false
+    override var isTouchpadMode: Boolean = false
         private set
 
     var isCursorVisible: Boolean = false
         private set
 
-    var isDragging: Boolean = false
+    override var isDragging: Boolean = false
         private set
 
     var touchpadSensitivity: Float = 1.0f
@@ -43,8 +47,11 @@ class DefaultMouseController(
     private var cursorX: Float = (transformer.remoteWidth / 2).toFloat()
     private var cursorY: Float = (transformer.remoteHeight / 2).toFloat()
 
-    val virtualCursorPosition: PointF
+    override val virtualCursorPosition: PointF
         get() = PointF(cursorX, cursorY)
+
+    override val cursorScreenPosition: PointF
+        get() = transformer.desktopToScreen(cursorX, cursorY)
 
     private fun resolveTargetCoordinates(screenX: Float, screenY: Float): Pair<Int, Int> {
         return if (isTouchpadMode) {

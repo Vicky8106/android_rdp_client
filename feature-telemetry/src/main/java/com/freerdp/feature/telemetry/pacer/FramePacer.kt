@@ -27,7 +27,8 @@ import java.util.concurrent.atomic.AtomicReference
 class FramePacer(
     private val onFrameDroppedCallback: ((Bitmap) -> Unit)? = null,
     val maxFrameAgeNanos: Long = DEFAULT_MAX_FRAME_AGE_NANOS,
-    val vsyncPeriodNanos: Long = DEFAULT_VSYNC_PERIOD_NANOS
+    val vsyncPeriodNanos: Long = DEFAULT_VSYNC_PERIOD_NANOS,
+    val retainInitialFrame: Boolean = true
 ) {
 
     init {
@@ -160,7 +161,8 @@ class FramePacer(
             lastVsyncTimestampNanos = vsyncTimestampNanos
 
             val frame = frameSlot.getAndSet(null) ?: return null
-            if (isStale(frame, vsyncTimestampNanos)) {
+            val isInitial = _totalRendered.get() == 0L
+            if ((!retainInitialFrame || !isInitial) && isStale(frame, vsyncTimestampNanos)) {
                 _staleDropped.incrementAndGet()
                 _totalDropped.incrementAndGet()
                 onFrameDroppedCallback?.invoke(frame.bitmap)

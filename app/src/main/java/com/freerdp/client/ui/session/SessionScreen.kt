@@ -239,6 +239,13 @@ fun SessionScreen(
                     canvasView = view
                 }
             },
+            update = { view ->
+                val res = remoteResolution
+                if (res != null && (view.transformer.remoteWidth != res.first || view.transformer.remoteHeight != res.second)) {
+                    view.transformer.setRemoteResolution(res.first, res.second)
+                    view.resetViewportToFit()
+                }
+            },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -267,6 +274,16 @@ fun SessionScreen(
                             overlay.btnTouchpadToggle.performClick()
                         }
                         overlayView = overlay
+                    }
+                },
+                update = { overlay ->
+                    if (overlay.safeInsets != safeInsets) {
+                        overlay.setSafeInsets(safeInsets)
+                    }
+                    if (overlay.mouseController == null) {
+                        overlay.mouseController = vm.mouseController ?: canvasView?.let {
+                            vm.createMouseController(it.transformer, it)
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize()
