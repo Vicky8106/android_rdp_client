@@ -58,6 +58,13 @@ $requiredLibs = @(
     'libfreerdp-android.so'
 )
 
+# Every .so the four required libraries DT_NEEDED at runtime must ship too:
+# libcrypto.so.NN / libssl.so.NN (OpenSSL TLS), libavcodec/libavutil (FFmpeg),
+# libopus, libopenh264, libpng, libwebp, libjpeg, libcjson, liburiparser, etc.
+# The versioned sonames (e.g. libcrypto.so.3) are matched by lib*.so* and must
+# keep their exact file names - the Android linker resolves DT_NEEDED by name.
+$depPattern = 'lib*.so*'
+
 if (-not (Test-Path $SourceRoot)) {
     throw "SourceRoot not found: $SourceRoot - build FreeRDP first (see handoff for exact steps)."
 }
@@ -74,7 +81,7 @@ foreach ($abi in $Abis) {
         $srcDir = $SourceRoot
     }
 
-    $found = Get-ChildItem $srcDir -Filter '*.so' -ErrorAction SilentlyContinue
+    $found = Get-ChildItem $srcDir -Filter $depPattern -File -ErrorAction SilentlyContinue
     if (-not $found) {
         Write-Warning "No .so files under $srcDir - skipping ABI $abi."
         continue
@@ -83,20 +90,23 @@ foreach ($abi in $Abis) {
     $dst = Join-Path $jniLibsRoot $abi
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
 
-    foreach ($lib in $requiredLibs) {
-        $src = Join-Path $srcDir $lib
-        if (-not (Test-Path $src)) {
-            Write-Warning "MISSING required library $lib for $abi (looked in $srcDir). System.loadLibrary will fail on-device until all four exist."
-            continue
-        }
+    # Copy every shared library (the four required plus their DT_NEEDED deps).
+    foreach ($f in $found) {
         # Sanity: real ELF shared object, not a stub. ELF magic = 7F 45 4C 46.
-        $bytes = [System.IO.File]::ReadAllBytes($src)[0..3]
+        $bytes = [System.IO.File]::ReadAllBytes($f.FullName)[0..3]
         if ($bytes[0] -ne 0x7F -or $bytes[1] -ne 0x45 -or $bytes[2] -ne 0x4C -or $bytes[3] -ne 0x46) {
-            throw "$src is not an ELF shared object - refusing to package (no fabricated binaries)."
+            throw "$($f.FullName) is not an ELF shared object - refusing to package (no fabricated binaries)."
         }
-        Copy-Item -Force $src (Join-Path $dst $lib)
+        Copy-Item -Force $f.FullName (Join-Path $dst $f.Name)
         $copied++
-        Write-Host "packaged  $abi\$lib" -ForegroundColor Green
+        Write-Host "packaged  $abi\$($f.Name)" -ForegroundColor Green
+    }
+
+    # The four System.loadLibrary names must all be present now.
+    foreach ($lib in $requiredLibs) {
+        if (-not (Test-Path (Join-Path $dst $lib))) {
+            Write-Warning "MISSING required library $lib for $abi (looked in $srcDir). System.loadLibrary will fail on-device until it exists."
+        }
     }
 }
 
