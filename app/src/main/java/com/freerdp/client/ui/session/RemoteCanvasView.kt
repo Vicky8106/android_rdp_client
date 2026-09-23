@@ -137,7 +137,13 @@ class RemoteCanvasView @JvmOverloads constructor(
                     invalidate()
                 }
             }
-            choreographer.postFrameCallback(this)
+            // Re-arm DELAYED by one frame interval, never immediately: an instant
+            // re-post makes this callback permanently "due" on a paused test looper,
+            // so the message queue can never quiesce (Robolectric waitForIdle livelock).
+            // On a device a +16ms delayed frame callback still executes at the very next
+            // vsync (Choreographer runs delayed callbacks at the first frame past the
+            // deadline), so the blit cadence — and input-to-display latency — are unchanged.
+            choreographer.postFrameCallbackDelayed(this, VSYNC_INTERVAL_MS)
         }
     }
 
@@ -259,5 +265,8 @@ class RemoteCanvasView @JvmOverloads constructor(
     companion object {
         /** Pixels of two-finger travel per scroll-wheel notch (touchpad mode). */
         private const val SCROLL_THRESHOLD = 36f
+
+        /** Frame interval used to re-arm the vsync heartbeat (≈60 Hz cadence). */
+        private const val VSYNC_INTERVAL_MS = 16L
     }
 }

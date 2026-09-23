@@ -88,7 +88,10 @@ class FloatingMouseOverlayView @JvmOverloads constructor(
         setupPaletteView()
 
         addView(bubbleView)
-        addView(paletteView)
+        // Explicit wrap-content: FrameLayout's default child params are MATCH_PARENT,
+        // which made the expanded palette a full-screen panel covering the remote
+        // desktop instead of a compact button cluster at the saved position.
+        addView(paletteView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
 
         setState(OverlayState.COLLAPSED)
     }

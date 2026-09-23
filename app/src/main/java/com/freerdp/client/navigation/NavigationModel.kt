@@ -1,7 +1,9 @@
 package com.freerdp.client.navigation
 
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.snapshots.SnapshotStateList
 
 /** Destinations of the application. Serializable so the back stack survives process death. */
 sealed interface AppRoute {
@@ -35,7 +37,15 @@ sealed interface AppRoute {
  */
 class NavigationModel(initial: List<AppRoute> = listOf(AppRoute.ProfileList)) {
 
-    private val stack: MutableList<AppRoute> = initial.toMutableList()
+    // MUST be Compose snapshot state: AppNavHost reads `current`/`canPop` during
+    // composition, so push/pop have to invalidate that composition. A plain
+    // ArrayList is never observed — taps updated the stack but the UI never
+    // recomposed, which made every navigation button (New profile, Settings,
+    // Connect, Edit, save/back) appear dead on device. Reproduced and pinned by
+    // UiInteractionSmokeTest.
+    private val stack: SnapshotStateList<AppRoute> = mutableStateListOf<AppRoute>().apply {
+        addAll(if (initial.isEmpty()) listOf(AppRoute.ProfileList) else initial)
+    }
 
     val current: AppRoute get() = stack.last()
     val canPop: Boolean get() = stack.size > 1
