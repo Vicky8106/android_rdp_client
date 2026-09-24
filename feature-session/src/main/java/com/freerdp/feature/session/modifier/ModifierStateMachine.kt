@@ -38,7 +38,8 @@ enum class ModifierKey {
     ARROW_DOWN,
     ENTER,
     BACKSPACE,
-    SPACE
+    SPACE,
+    CAPS_LOCK
 }
 
 enum class LatchState {
@@ -96,6 +97,33 @@ class ModifierStateMachine(
             LatchState.LOCKED -> LatchState.INACTIVE
         }
         tryTransition(key, target)
+    }
+
+    /**
+     * Long-press semantics for RealVNC ergonomics:
+     * - INACTIVE -> transitions directly to LOCKED (locks modifier, emits key-down once)
+     * - LATCHED  -> transitions to LOCKED (locks modifier, key already down)
+     * - LOCKED   -> transitions to INACTIVE (unlocks and releases, emits key-up)
+     * - Non-latchable modifier keys dispatch special key tap.
+     */
+    @Synchronized
+    fun onModifierKeyLongPressed(key: ModifierKey) {
+        if (!latchableModifiers.contains(key)) {
+            onSpecialKeyTapped(key)
+            return
+        }
+        when (getModifierState(key)) {
+            LatchState.INACTIVE -> {
+                tryTransition(key, LatchState.LATCHED)
+                tryTransition(key, LatchState.LOCKED)
+            }
+            LatchState.LATCHED -> {
+                tryTransition(key, LatchState.LOCKED)
+            }
+            LatchState.LOCKED -> {
+                tryTransition(key, LatchState.INACTIVE)
+            }
+        }
     }
 
     /**
@@ -211,12 +239,23 @@ class ModifierStateMachine(
         }
     }
 
-    private fun releaseLatchedModifiers() {
+    @Synchronized
+    fun releaseLatchedModifiers() {
         latchableModifiers.forEach { key ->
             if (getModifierState(key) == LatchState.LATCHED) {
                 tryTransition(key, LatchState.INACTIVE)
             }
         }
+    }
+
+    /**
+     * Called when a non-modifier key is released (ACTION_UP).
+     * Automatically unlatches sticky modifiers (LATCHED -> INACTIVE), while leaving
+     * locked modifiers (LOCKED) held down.
+     */
+    @Synchronized
+    fun onNonModifierKeyReleased(scancode: Int = 0) {
+        releaseLatchedModifiers()
     }
 
     private fun notifyStateChange(key: ModifierKey, state: LatchState) {

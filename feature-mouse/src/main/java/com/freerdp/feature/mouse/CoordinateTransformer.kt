@@ -192,4 +192,71 @@ class CoordinateTransformer(
             clampAndCenterViewport()
         }
     }
+
+    /**
+     * Converts given viewport touch point to corresponding framebuffer point.
+     * Returns null if point lies outside of the active framebuffer (e.g. In letterbox margin).
+     */
+    fun toFb(vpPoint: PointF): PointF? {
+        val fbX = (vpPoint.x - translationX) / scale
+        val fbY = (vpPoint.y - translationY) / scale
+        if (fbX < 0f || fbY < 0f || fbX >= remoteWidth || fbY >= remoteHeight) {
+            return null
+        }
+        return PointF(fbX, fbY)
+    }
+
+    /**
+     * Converts given viewport touch point to framebuffer point without boundary checks.
+     */
+    fun toFbUnchecked(vpPoint: PointF): PointF {
+        val fbX = (vpPoint.x - translationX) / scale
+        val fbY = (vpPoint.y - translationY) / scale
+        return PointF(fbX, fbY)
+    }
+
+    /**
+     * Converts framebuffer desktop coordinates to Android screen pixel coordinates.
+     */
+    fun toVP(fbPoint: PointF): PointF {
+        return desktopToScreen(fbPoint.x, fbPoint.y)
+    }
+
+    /**
+     * When user taps outside the frame (e.g. In letterbox black bars),
+     * coerces the point to the nearest framebuffer edge pixel in screen coordinates.
+     * This allows triggering auto-hiding remote taskbars and panels even with letterboxing.
+     */
+    fun coerceToFbEdge(vpPoint: PointF): PointF? {
+        if (remoteWidth < 1 || remoteHeight < 1) return null
+        val fb = toFbUnchecked(vpPoint)
+        val clampedFb = PointF(
+            fb.x.coerceIn(0f, max(0, remoteWidth - 1).toFloat()),
+            fb.y.coerceIn(0f, max(0, remoteHeight - 1).toFloat())
+        )
+        return toVP(clampedFb)
+    }
+
+    /**
+     * Returns the coerced desktop/framebuffer coordinate for points outside the frame.
+     */
+    fun coerceToFbEdgeDesktop(vpPoint: PointF): PointF? {
+        if (remoteWidth < 1 || remoteHeight < 1) return null
+        val fb = toFbUnchecked(vpPoint)
+        return PointF(
+            fb.x.coerceIn(0f, max(0, remoteWidth - 1).toFloat()),
+            fb.y.coerceIn(0f, max(0, remoteHeight - 1).toFloat())
+        )
+    }
+
+    /**
+     * Pans the viewport to keep the given desktop coordinate centered on screen
+     * if the remote frame is larger than the viewport.
+     */
+    fun autoCenterOn(desktopX: Float, desktopY: Float) {
+        val vp = desktopToScreen(desktopX, desktopY)
+        val centerDiffX = (viewWidth / 2f) - vp.x
+        val centerDiffY = (viewHeight / 2f) - vp.y
+        applyPan(centerDiffX, centerDiffY)
+    }
 }

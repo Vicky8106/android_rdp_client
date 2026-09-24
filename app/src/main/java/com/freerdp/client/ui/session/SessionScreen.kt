@@ -1,6 +1,7 @@
 package com.freerdp.client.ui.session
 
 import android.content.Context
+import android.graphics.PointF
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -93,8 +94,6 @@ import com.freerdp.client.session.SessionErrorCodes
 import com.freerdp.client.session.SessionViewModel
 import com.freerdp.client.session.SessionPhase
 import com.freerdp.client.ui.components.touchTarget
-import com.freerdp.feature.mouse.FloatingMouseOverlayView
-import com.freerdp.feature.mouse.SafeInsets
 import com.freerdp.feature.session.LatchState
 import com.freerdp.feature.session.MacroAction
 import com.freerdp.feature.session.ModifierKey
@@ -142,13 +141,8 @@ fun SessionScreen(
     val modifierStates by vm.modifierStates.collectAsState()
 
     var canvasView by remember { mutableStateOf<RemoteCanvasView?>(null) }
-    var overlayView by remember { mutableStateOf<FloatingMouseOverlayView?>(null) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
     var zoomPercent by remember { mutableIntStateOf(100) }
-
-    val overlayPrefs = remember {
-        context.getSharedPreferences("floating_mouse_overlay_prefs", Context.MODE_PRIVATE)
-    }
 
     val isConnected = phase is SessionPhase.Connected
     val isConnecting = phase is SessionPhase.Connecting
@@ -202,22 +196,8 @@ fun SessionScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // --- persist the floating overlay position across rotation -------------
-    DisposableEffect(Unit) {
-        onDispose { overlayView?.savePosition(overlayPrefs) }
-    }
-
     // --- system back = confirm exit ----------------------------------------
     BackHandler(enabled = phase !is SessionPhase.Idle) { vm.requestExit() }
-
-    // System bar insets for the floating overlay's safe-area clamping.
-    val barsPadding = WindowInsets.systemBars.asPaddingValues()
-    val safeInsets = SafeInsets(
-        left = with(density) { barsPadding.calculateLeftPadding(LayoutDirection.Ltr).roundToPx() },
-        top = with(density) { barsPadding.calculateTopPadding().roundToPx() },
-        right = with(density) { barsPadding.calculateRightPadding(LayoutDirection.Ltr).roundToPx() },
-        bottom = with(density) { barsPadding.calculateBottomPadding().roundToPx() }
-    )
 
     Box(
         Modifier
@@ -249,43 +229,30 @@ fun SessionScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // ---------------------------------------- floating mouse overlay ----
+        // ---------------------------------------- virtual mouse overlay -----
         if (overlayVisible) {
-            AndroidView(
-                factory = { ctx ->
-                    FloatingMouseOverlayView(ctx).also { overlay ->
-                        overlay.restorePosition(overlayPrefs)
-                        overlay.mouseController = vm.mouseController ?: canvasView?.let {
-                            vm.createMouseController(it.transformer, it)
-                        }
-                        overlay.setSafeInsets(safeInsets)
-                        overlay.bubbleView.contentDescription =
-                            "Floating mouse controls — drag to reposition, tap to expand"
-                        overlay.btnLeftClick.contentDescription = "Left mouse button"
-                        overlay.btnRightClick.contentDescription = "Right mouse button"
-                        overlay.btnDragToggle.contentDescription = "Toggle click-and-drag mode"
-                        overlay.btnScrollUp.contentDescription = "Scroll up"
-                        overlay.btnScrollDown.contentDescription = "Scroll down"
-                        overlay.btnTouchpadToggle.contentDescription = "Toggle touchpad mode"
-                        overlay.btnCursorToggle.contentDescription = "Toggle on-screen cursor"
-                        overlay.btnCollapse.contentDescription = "Collapse mouse controls"
-                        if (vm.touchpadDefault() && !overlay.isTouchpadActive) {
-                            // Aligns the overlay's own toggle state with the Settings default.
-                            overlay.btnTouchpadToggle.performClick()
-                        }
-                        overlayView = overlay
-                    }
-                },
-                update = { overlay ->
-                    if (overlay.safeInsets != safeInsets) {
-                        overlay.setSafeInsets(safeInsets)
-                    }
-                    if (overlay.mouseController == null) {
-                        overlay.mouseController = vm.mouseController ?: canvasView?.let {
-                            vm.createMouseController(it.transformer, it)
-                        }
-                    }
-                },
+            val currentMouseController = vm.mouseController ?: canvasView?.let {
+                vm.createMouseController(it.transformer, it)
+            }
+            val virtualMouse = remember(currentMouseController) {
+                VirtualMouse(
+                    mouseController = currentMouseController,
+                    onToggleKeyboard = { vm.toolbarAction(ToolbarAction.TOGGLE_KEYBOARD) },
+                    onCloseAction = { vm.toolbarAction(ToolbarAction.TOGGLE_MOUSE_OVERLAY) },
+                    onModeChange = { isTouchpad -> vm.setTouchpadMode(isTouchpad) }
+                ).apply {
+                    show(expand = false)
+                }
+            }
+            LaunchedEffect(overlayVisible) {
+                if (overlayVisible) {
+                    virtualMouse.show(expand = false)
+                } else {
+                    virtualMouse.hide()
+                }
+            }
+            VirtualMouseOverlay(
+                virtualMouse = virtualMouse,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -476,15 +443,31 @@ fun SessionScreen(
                     RemoteKeyboardField(vm = vm)
                 }
                 if (modifierBarVisible) {
-                    ModifierBar(
-                        states = modifierStates,
-                        onModifierTapped = { key ->
-                            if (mainView.isHapticFeedbackEnabled) {
-                                mainView.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                            }
-                            vm.onModifierTapped(key)
+                    val virtualKeysState = remember(vm.modifierMachine, vm.keyboardTimingManager) {
+                        VirtualKeysState(
+                            modifierStateMachine = vm.modifierMachine,
+                            keyboardTimingManager = vm.keyboardTimingManager,
+                            initialVisible = modifierBarVisible
+                        )
+                    }
+                    LaunchedEffect(modifierBarVisible) {
+                        virtualKeysState.isVisible = modifierBarVisible
+                    }
+                    VirtualKeysOverlay(
+                        state = virtualKeysState,
+                        onModifierTap = { vm.onModifierTapped(it) },
+                        onToggleKeyboard = { vm.toolbarAction(ToolbarAction.TOGGLE_KEYBOARD) },
+                        onToggleMouse = { vm.toolbarAction(ToolbarAction.TOGGLE_MOUSE_OVERLAY) },
+                        onScrollUp = {
+                            val pt = vm.mouseController?.cursorScreenPosition ?: PointF(0f, 0f)
+                            vm.mouseController?.handleScroll(pt.x, pt.y, 1.0f)
                         },
-                        onMacro = vm::onMacro
+                        onScrollDown = {
+                            val pt = vm.mouseController?.cursorScreenPosition ?: PointF(0f, 0f)
+                            vm.mouseController?.handleScroll(pt.x, pt.y, -1.0f)
+                        },
+                        onMacro = vm::onMacro,
+                        onClose = { vm.toolbarAction(ToolbarAction.TOGGLE_MODIFIER_BAR) }
                     )
                 }
                 QuickToolbar(
@@ -509,6 +492,22 @@ fun SessionScreen(
                     end = 16.dp
                 )
         )
+
+        // ---------------------------------------- in-session toolbar --------
+        if (showControls) {
+            var isToolbarDrawerOpen by remember { mutableStateOf(false) }
+            val isTouchpad by vm.isTouchpadMode.collectAsState()
+            InSessionToolbar(
+                isExpanded = isToolbarDrawerOpen,
+                onExpandedChange = { isToolbarDrawerOpen = it },
+                isTouchpadMode = isTouchpad,
+                onToggleKeyboard = { vm.toolbarAction(ToolbarAction.TOGGLE_KEYBOARD) },
+                onToggleInputMode = { vm.togglePointerMode() },
+                onToggleVirtualKeys = { vm.toolbarAction(ToolbarAction.TOGGLE_MODIFIER_BAR) },
+                onResetZoom = { canvasView?.resetViewportToFit() },
+                onDisconnect = { vm.confirmExit() }
+            )
+        }
 
         // --------------------------------------------- dialogs --------------
         if (passwordRequired) {
@@ -660,107 +659,6 @@ private fun HudValue(label: String, value: String) {
     }
 }
 
-// ------------------------------------------------------------- modifier bar -
-
-@Composable
-private fun ModifierBar(
-    states: Map<ModifierKey, LatchState>,
-    onModifierTapped: (ModifierKey) -> Unit,
-    onMacro: (MacroAction) -> Unit
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        val latchable = listOf(
-            ModifierKey.CTRL to "Ctrl",
-            ModifierKey.ALT to "Alt",
-            ModifierKey.WIN to "Win",
-            ModifierKey.ESC to "Esc"
-        )
-        latchable.forEach { (key, label) ->
-            ModifierKeyButton(label = label, state = states[key] ?: LatchState.INACTIVE) {
-                onModifierTapped(key)
-            }
-        }
-        Spacer(Modifier.size(8.dp))
-        val functionKeys = listOf(
-            ModifierKey.F1, ModifierKey.F2, ModifierKey.F3, ModifierKey.F4,
-            ModifierKey.F5, ModifierKey.F6, ModifierKey.F7, ModifierKey.F8,
-            ModifierKey.F9, ModifierKey.F10, ModifierKey.F11, ModifierKey.F12
-        )
-        functionKeys.forEachIndexed { index, key ->
-            ModifierKeyButton(label = "F${index + 1}", state = states[key] ?: LatchState.INACTIVE) {
-                onModifierTapped(key)
-            }
-        }
-        Spacer(Modifier.size(8.dp))
-        MacroButton(label = "Ctrl+Alt+Del") { onMacro(MacroAction.CTRL_ALT_DEL) }
-        MacroButton(label = "Alt+Tab") { onMacro(MacroAction.ALT_TAB) }
-        MacroButton(label = "Ctrl+C") { onMacro(MacroAction.CTRL_C) }
-        MacroButton(label = "Ctrl+V") { onMacro(MacroAction.CTRL_V) }
-    }
-}
-
-@Composable
-private fun ModifierKeyButton(label: String, state: LatchState, onClick: () -> Unit) {
-    val (color, contentColor) = when (state) {
-        LatchState.LOCKED -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.onPrimary
-        LatchState.LATCHED -> MaterialTheme.colorScheme.tertiaryContainer to
-            MaterialTheme.colorScheme.onTertiaryContainer
-        LatchState.INACTIVE -> MaterialTheme.colorScheme.surfaceVariant to
-            MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val stateWord = when (state) {
-        LatchState.LOCKED -> "locked"
-        LatchState.LATCHED -> "latched"
-        LatchState.INACTIVE -> "off"
-    }
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        color = color,
-        contentColor = contentColor,
-        modifier = Modifier
-            .height(48.dp)
-            .semantics { contentDescription = "$label key, $stateWord" }
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(label, style = MaterialTheme.typography.labelLarge)
-            if (state == LatchState.LOCKED) {
-                Text(" ▪", style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MacroButton(label: String, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        modifier = Modifier
-            .height(48.dp)
-            .semantics { contentDescription = "Send $label shortcut" }
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(label, style = MaterialTheme.typography.labelLarge)
-        }
-    }
-}
-
 // ------------------------------------------------------------ quick toolbar -
 
 @Composable
@@ -884,7 +782,11 @@ private fun RemoteKeyboardField(vm: SessionViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = "",
-                onValueChange = { text -> vm.onKeyboardText(text) },
+                onValueChange = { text ->
+                    if (text.isNotEmpty()) {
+                        vm.sendPacedKeyboardText(text)
+                    }
+                },
                 placeholder = { Text("Type on the remote desktop…") },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge,
@@ -894,7 +796,7 @@ private fun RemoteKeyboardField(vm: SessionViewModel) {
                         if (event.type == KeyEventType.KeyUp &&
                             (event.key == Key.Backspace || event.key == Key.Delete)
                         ) {
-                            vm.onKeyboardBackspace()
+                            vm.sendPacedKeyboardBackspace()
                             true
                         } else {
                             false

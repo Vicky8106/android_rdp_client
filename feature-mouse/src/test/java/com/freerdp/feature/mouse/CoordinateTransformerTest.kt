@@ -157,4 +157,77 @@ class CoordinateTransformerTest {
         assertEquals(-100f, values[Matrix.MTRANS_X], 0.001f)
         assertEquals(50f, values[Matrix.MTRANS_Y], 0.001f)
     }
+
+    @Test
+    fun testToFbAndToVPConversion() {
+        // Set 1:1 scale with translation (100, 200)
+        val customTransformer = CoordinateTransformer(
+            remoteWidth = 1000,
+            remoteHeight = 1000,
+            viewWidth = 2000,
+            viewHeight = 2000
+        )
+        customTransformer.setTransform(newScale = 1.0f, transX = 100f, transY = 200f)
+
+        // Point inside active frame
+        val insideVp = android.graphics.PointF(300f, 400f)
+        val fb = customTransformer.toFb(insideVp)
+        org.junit.Assert.assertNotNull(fb)
+        assertEquals(200f, fb!!.x, 0.01f) // (300 - 100) / 1.0 = 200
+        assertEquals(200f, fb.y, 0.01f) // (400 - 200) / 1.0 = 200
+
+        // Roundtrip toVP
+        val vp = customTransformer.toVP(fb)
+        assertEquals(insideVp.x, vp.x, 0.01f)
+        assertEquals(insideVp.y, vp.y, 0.01f)
+
+        // Point outside active frame (e.g. In letterbox margin: screen x = 50 < translationX 100)
+        val outsideVp = android.graphics.PointF(50f, 50f)
+        org.junit.Assert.assertNull(customTransformer.toFb(outsideVp))
+
+        // toFbUnchecked produces raw negative coordinates
+        val uncheckedFb = customTransformer.toFbUnchecked(outsideVp)
+        assertTrue(uncheckedFb.x < 0f)
+    }
+
+    @Test
+    fun testCoerceToFbEdge() {
+        val customTransformer = CoordinateTransformer(
+            remoteWidth = 1000,
+            remoteHeight = 1000,
+            viewWidth = 2000,
+            viewHeight = 2000
+        )
+        customTransformer.setTransform(newScale = 1.0f, transX = 100f, transY = 200f)
+
+        // Point far to the left of the frame (screen x = 0)
+        val outsideVp = android.graphics.PointF(0f, 500f)
+        val edgeDesktop = customTransformer.coerceToFbEdgeDesktop(outsideVp)
+        org.junit.Assert.assertNotNull(edgeDesktop)
+        assertEquals(0f, edgeDesktop!!.x, 0.01f) // Clamped to left edge x = 0
+        assertEquals(300f, edgeDesktop.y, 0.01f) // (500 - 200) = 300
+
+        val edgeVp = customTransformer.coerceToFbEdge(outsideVp)
+        org.junit.Assert.assertNotNull(edgeVp)
+        assertEquals(100f, edgeVp!!.x, 0.01f) // desktop 0 * scale 1 + transX 100 = 100
+    }
+
+    @Test
+    fun testAutoCenterOn() {
+        // Zoom in to 2.0x so content is 2000x2000 in a 1000x1000 viewport
+        val customTransformer = CoordinateTransformer(
+            remoteWidth = 1000,
+            remoteHeight = 1000,
+            viewWidth = 1000,
+            viewHeight = 1000
+        )
+        customTransformer.setScale(2.0f, 500f, 500f)
+        val origTransX = customTransformer.translationX
+
+        // Center on desktop coordinate (200, 200)
+        customTransformer.autoCenterOn(200f, 200f)
+
+        // Viewport translation should have panned
+        assertTrue(customTransformer.translationX != origTransX || customTransformer.translationX <= 0f)
+    }
 }

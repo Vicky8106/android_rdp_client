@@ -129,3 +129,115 @@ Clean up untracked temporary agent directories (`.agents/auditor_gen3_1/`, etc.)
 - [ ] Working tree has no untracked scratch artifacts or lingering temporary agent directories.
 - [ ] All changes are committed and pushed to `origin/main`.
 - [ ] `git ls-remote origin main` confirms the remote tip equals local `HEAD`.
+
+## Follow-up — 2026-09-24T11:21:05Z
+
+Port the mature in-session user experience, virtual keys, touch/mouse pointer modes, and keyboard input handling from the local VNC repository (`C:\Users\Administrator\avnc`) into the Android RDP client (`C:\Users\Administrator\teamwork_projects\android_rdp_client`), resolving all interaction, streaming, and stability bugs.
+
+Working directory: C:\Users\Administrator\teamwork_projects\android_rdp_client
+Integrity mode: development
+
+## Reference Resources
+- Local reference VNC codebase: `C:\Users\Administrator\avnc`
+  - Session layout & toolbar: `app/src/main/java/com/vncandroid/free/ui/vnc/Toolbar.kt`, `VncActivity.kt`, `LayoutManager.kt`
+  - Virtual keys: `app/src/main/java/com/vncandroid/free/ui/vnc/VirtualKeysCompose.kt`, `VirtualKeys.kt`
+  - Virtual mouse & gestures: `app/src/main/java/com/vncandroid/free/ui/vnc/VirtualMouseCompose.kt`, `input/TouchHandler.kt`, `input/PointerModes.kt`
+  - Keyboard & BMC hold timing: `app/src/main/java/com/vncandroid/free/ui/vnc/input/KeyHandler.kt`, `util/Keyboard.kt`
+- Target RDP codebase: `C:\Users\Administrator\teamwork_projects\android_rdp_client`
+  - Session UI: `app/src/main/java/com/freerdp/client/ui/session/SessionScreen.kt`, `RemoteCanvasView.kt`
+  - Mouse & overlay: `feature-mouse/src/main/java/com/freerdp/feature/mouse/`
+  - Keyboard & scancodes: `feature-session/src/main/java/com/freerdp/feature/session/keyboard/ScancodeTranslator.kt`
+
+## Requirements
+
+### R1. Collapsible In-Session Toolbar & Navigation
+Adopt the `avnc` collapsible session toolbar and layout pattern in `android_rdp_client`. Provide direct, accessible controls for toggling the Android soft keyboard, switching mouse/input mode (Touchpad mode vs. Direct Touch), toggling the virtual keys bar, switching screen scale/fit modes, and executing clean session disconnection.
+
+### R2. RealVNC-Style Virtual Keys Bar & Soft Keyboard Timing
+Port the Compose virtual keys system from `avnc` (`VirtualKeysCompose.kt`) with full RealVNC ergonomics: collapsible Fn strip (F1–F12), sticky modifier keys (Ctrl, Alt, Shift, Super/Windows), Esc, Tab, Delete, and an inverted-T arrow cluster. Integrate `avnc`'s keyboard input handling (`KeyHandler.kt`), including BMC key-press hold timing for Android soft-keyboard Enter, Backspace, Space, Tab, and special keys, properly translated into RDP keyboard scancodes.
+
+### R3. Multi-Mode Touch, Touchpad & Virtual Mouse Controls
+Port the input engine from `avnc` (`TouchHandler.kt`, `PointerModes.kt`, `VirtualMouseCompose.kt`) to support:
+1. **Direct Touch Mode**: Direct tap-to-click at touch coordinates, two-finger scroll/pan, and pinch-to-zoom.
+2. **Touchpad / Mouse Pointer Mode**: Relative cursor movement with acceleration, dedicated left, middle, and right click controls, drag lock, and smooth scrolling controls.
+Ensure all coordinate transformations and pointer events map accurately to the FreeRDP native protocol layer.
+
+### R4. Test Suite, Build Verification & Release Packaging
+Update and expand unit and Robolectric tests across `:feature-mouse`, `:feature-session`, and `:app` to cover the ported virtual keys, scancode conversions, keyboard timing, and mouse modes. Maintain 100% test pass rate on `.\gradlew.bat testDebugUnitTest` and assemble a verified, functional debug APK under 100 MB in `releases/app-debug.apk`.
+
+## Verification Resources
+- Test suite command: `.\gradlew.bat testDebugUnitTest`
+- Build command: `.\gradlew.bat assembleDebug`
+- Running Android emulator: `emulator-5554` (via `C:\Android\Sdk\platform-tools\adb.exe`)
+- Host test RDP service: `10.0.2.2:3389` (user `rdpdemo`, password `Sup3rdemo!23`)
+- Output release APK: `releases/app-debug.apk`
+
+## Acceptance Criteria
+
+### Toolbar & In-Session UX
+- [ ] In-session toolbar smoothly expands and collapses without obscuring the desktop canvas unnecessarily.
+- [ ] Toolbar controls for keyboard toggle, input mode switch (touchpad vs. direct touch), virtual keys bar toggle, zoom/fit, and disconnect function responsively.
+
+### Virtual Keys & Keyboard Input
+- [ ] Virtual keys bar renders RealVNC-style layout (Fn bar, sticky Ctrl/Alt/Shift/Win modifiers, Esc, Tab, Delete, inverted-T arrow keys) and transmits correct RDP key events.
+- [ ] Soft keyboard input (letters, numbers, Enter, Backspace, Space, Tab) dispatches with proper key hold timing and functions reliably in remote text fields.
+
+### Mouse & Touch Interaction
+- [ ] Direct Touch mode accurately executes clicks and drags at the touch point.
+- [ ] Touchpad mode provides smooth cursor movement with acceleration, dedicated mouse buttons (left, right, middle), and scroll controls.
+
+### Build & Test Integrity
+- [ ] `.\gradlew.bat testDebugUnitTest` passes 100% with 0 failures and 0 errors across all modules.
+- [ ] `.\gradlew.bat assembleDebug` builds successfully and produces a signed APK in `releases/app-debug.apk` under 100 MB.
+
+## Follow-up — 2026-09-24T15:53:26Z
+
+Complete the Android RDP Client UX and input port from the local reference VNC client (`C:\Users\Administrator\avnc`) into `C:\Users\Administrator\teamwork_projects\android_rdp_client`: build the collapsible in-session toolbar drawer, wire all Compose overlays (toolbar, virtual keys, virtual mouse, pointer modes) into `SessionScreen` and `RemoteCanvasView`, verify that all 664+ tests pass with zero failures, and package the updated debug APK in `releases/` under 100 MB.
+
+Working directory: C:\Users\Administrator\teamwork_projects\android_rdp_client
+Integrity mode: development
+
+## Reference Resources
+- Local reference VNC codebase: `C:\Users\Administrator\avnc`
+  - Toolbar & drawer: `app/src/main/java/com/vncandroid/free/ui/vnc/Toolbar.kt`, `VncActivity.kt`, `LayoutManager.kt`
+  - Virtual keys: `app/src/main/java/com/vncandroid/free/ui/vnc/VirtualKeysCompose.kt`, `VirtualKeys.kt`
+  - Virtual mouse & pointer modes: `app/src/main/java/com/vncandroid/free/ui/vnc/VirtualMouseCompose.kt`, `input/TouchHandler.kt`, `input/PointerModes.kt`
+  - Keyboard timing: `app/src/main/java/com/vncandroid/free/ui/vnc/input/KeyHandler.kt`
+- Target RDP codebase: `C:\Users\Administrator\teamwork_projects\android_rdp_client`
+  - Session UI: `app/src/main/java/com/freerdp/client/ui/session/SessionScreen.kt`, `RemoteCanvasView.kt`
+  - Mouse engine: `feature-mouse/src/main/java/com/freerdp/feature/mouse/`
+  - Session & keyboard engine: `feature-session/src/main/java/com/freerdp/feature/session/keyboard/`
+
+## Requirements
+
+### R1. Collapsible In-Session Toolbar & Floating Opener
+Implement the collapsible session toolbar drawer and floating draggable opener button in `SessionScreen.kt`. Support transparent scrim dismissal without spurious canvas clicks, Android 10+ system gesture exclusion zones, persistent opener vertical bias across sessions, and quick actions: soft keyboard toggle, pointer mode switch (Direct Touch vs Touchpad), virtual keys bar toggle, display scale/fit, and clean session disconnect.
+
+### R2. Active Session Overlay Integration & Wiring
+Wire `InSessionToolbar`, `VirtualKeysCompose` (collapsible Fn strip F1–F12, sticky modifiers Ctrl/Alt/Shift/Win, inverted-T arrow pad), and `VirtualMouseCompose` (draggable FAB, expandable pill with LMB/MMB/RMB, hold-to-repeat scroll pillar) into `SessionScreen.kt` and `RemoteCanvasView.kt`. Connect `PointerModes` (Direct Touch with letterbox edge coercion, Touchpad mode with 3-tier libinput acceleration) and `KeyboardTimingManager` (50ms BMC key hold, 25ms text pacing) directly to the active FreeRDP session engine.
+
+### R3. Test Suite Pass & Regression Verification
+Maintain a 100% pass rate across the full automated test suite across all 5 modules (`:app`, `:core-rdp`, `:feature-mouse`, `:feature-session`, `:feature-telemetry`), including all unit, Robolectric, and 126 opaque-box UX/Input E2E tests in `app/src/test/java/com/freerdp/client/e2e/uxinput/`, verifying ≥ 664 passing tests with 0 failures and 0 errors.
+
+### R4. Release APK Assembly & Verification
+Build a functional debug APK via `.\gradlew.bat assembleDebug`, synchronize `releases/app-debug.apk` with `app/build/outputs/apk/debug/app-debug.apk`, verify matching SHA-256 checksums, and ensure the resulting APK binary is strictly under 100 MB.
+
+## Acceptance Criteria
+
+### Toolbar & In-Session UX
+- [ ] In-session toolbar drawer smoothly expands and collapses via floating opener or scrim tap without triggering canvas click events.
+- [ ] Draggable floating opener persists and restores vertical bias between sessions.
+- [ ] Quick action controls for soft keyboard toggle, pointer mode switch, virtual keys toggle, zoom/fit reset, and session disconnect work cleanly.
+
+### Virtual Keys & Keyboard Timing
+- [ ] RealVNC virtual keys bar renders correctly, handles sticky/locked modifier states, and dispatches Windows PC Scancode Set 1 codes to the RDP engine.
+- [ ] Soft keyboard text streaming and Enter/Backspace/Tab keys respect 50ms BMC hold timing and 25ms pacing.
+
+### Pointer & Touch Modes
+- [ ] Direct Touch mode executes clicks and drags at touch coordinates with letterbox edge coercion.
+- [ ] Touchpad mode provides smooth cursor movement with 3-tier physical acceleration and supports left, right, and middle mouse clicks (BUTTON3).
+- [ ] Virtual mouse overlay allows relative mouse interaction, middle click, drag lock, and hold-to-repeat scrolling.
+
+### Build & Test Integrity
+- [ ] `.\gradlew.bat testDebugUnitTest` completes with 100% pass rate (0 failures, 0 errors, ≥ 664 tests).
+- [ ] `.\gradlew.bat assembleDebug` succeeds and `releases/app-debug.apk` matches the generated APK and is under 100 MB.

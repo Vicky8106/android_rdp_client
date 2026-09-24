@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as GCanvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PointF
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.Choreographer
@@ -71,26 +72,49 @@ class RemoteCanvasView @JvmOverloads constructor(
     /** The disambiguated gesture surface handed to [GestureDisambiguationEngine]. */
     val gestureListener: GestureEventListener = object : GestureEventListener {
         override fun onSingleTap(screenX: Float, screenY: Float) {
-            mouseController?.handleLeftClick(screenX, screenY)
+            val controller = mouseController
+            if (controller != null && !controller.isTouchpadMode) {
+                val coerced = transformer.coerceToFbEdgeDesktop(PointF(screenX, screenY))
+                val targetScreenPt = if (coerced != null) transformer.desktopToScreen(coerced.x, coerced.y) else PointF(screenX, screenY)
+                controller.handleLeftClick(targetScreenPt.x, targetScreenPt.y)
+            } else {
+                mouseController?.handleLeftClick(screenX, screenY)
+            }
         }
 
         override fun onDoubleTap(screenX: Float, screenY: Float) {
-            mouseController?.handleDoubleClick(screenX, screenY)
+            val controller = mouseController
+            if (controller != null && !controller.isTouchpadMode) {
+                val coerced = transformer.coerceToFbEdgeDesktop(PointF(screenX, screenY))
+                val targetScreenPt = if (coerced != null) transformer.desktopToScreen(coerced.x, coerced.y) else PointF(screenX, screenY)
+                controller.handleDoubleClick(targetScreenPt.x, targetScreenPt.y)
+            } else {
+                mouseController?.handleDoubleClick(screenX, screenY)
+            }
         }
 
         override fun onLongPress(screenX: Float, screenY: Float) {
-            mouseController?.handleRightClick(screenX, screenY)
+            val controller = mouseController
+            if (controller != null && !controller.isTouchpadMode) {
+                val coerced = transformer.coerceToFbEdgeDesktop(PointF(screenX, screenY))
+                val targetScreenPt = if (coerced != null) transformer.desktopToScreen(coerced.x, coerced.y) else PointF(screenX, screenY)
+                controller.handleRightClick(targetScreenPt.x, targetScreenPt.y)
+            } else {
+                mouseController?.handleRightClick(screenX, screenY)
+            }
         }
 
         override fun onPan(deltaX: Float, deltaY: Float) {
             val controller = mouseController
             if (controller != null && controller.isTouchpadMode) {
-                controller.handleTouchpadMove(deltaX, deltaY)
+                controller.handleTouchpadMove(deltaX, deltaY, accelerate = true)
             } else if (controller != null && controller.isDragging) {
                 val cursor = controller.inner.virtualCursorPosition
                 val newDesktopX = cursor.x + deltaX / transformer.scale
                 val newDesktopY = cursor.y + deltaY / transformer.scale
-                val screenPt = transformer.desktopToScreen(newDesktopX, newDesktopY)
+                val coerced = transformer.coerceToFbEdgeDesktop(transformer.desktopToScreen(newDesktopX, newDesktopY))
+                    ?: PointF(newDesktopX, newDesktopY)
+                val screenPt = transformer.desktopToScreen(coerced.x, coerced.y)
                 controller.handleDragMove(screenPt.x, screenPt.y)
                 invalidate()
             } else {

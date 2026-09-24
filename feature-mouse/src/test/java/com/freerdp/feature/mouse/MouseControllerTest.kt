@@ -68,6 +68,44 @@ class MouseControllerTest {
     }
 
     @Test
+    fun testMiddleClickGeneratesDownAndUpSequence() {
+        controller.handleMiddleClick(350f, 450f)
+
+        assertEquals(2, mockEngine.recordedPointerEvents.size)
+        val down = mockEngine.recordedPointerEvents[0]
+        val up = mockEngine.recordedPointerEvents[1]
+
+        assertEquals(RdpPointerFlags.MIDDLE_BUTTON_DOWN, down.flags)
+        assertEquals(350, down.x)
+        assertEquals(450, down.y)
+
+        assertEquals(RdpPointerFlags.MIDDLE_BUTTON_UP, up.flags)
+        assertEquals(350, up.x)
+        assertEquals(450, up.y)
+    }
+
+    @Test
+    fun testTouchpadModeMiddleClickAtVirtualCursor() {
+        controller.setTouchpadMode(true)
+        controller.setVirtualCursorPosition(700f, 400f)
+        mockEngine.clearRecordedEvents()
+
+        controller.handleMiddleClick(100f, 100f)
+
+        assertEquals(2, mockEngine.recordedPointerEvents.size)
+        val down = mockEngine.recordedPointerEvents[0]
+        val up = mockEngine.recordedPointerEvents[1]
+
+        assertEquals(RdpPointerFlags.MIDDLE_BUTTON_DOWN, down.flags)
+        assertEquals(700, down.x)
+        assertEquals(400, down.y)
+
+        assertEquals(RdpPointerFlags.MIDDLE_BUTTON_UP, up.flags)
+        assertEquals(700, up.x)
+        assertEquals(400, up.y)
+    }
+
+    @Test
     fun testDoubleClickGeneratesFourPointerEvents() {
         controller.handleDoubleClick(200f, 250f)
 

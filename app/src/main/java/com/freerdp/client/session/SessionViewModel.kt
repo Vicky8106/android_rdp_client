@@ -28,6 +28,8 @@ import com.freerdp.feature.session.ProfileRepository
 import com.freerdp.feature.session.QuickActionToolbarFSM
 import com.freerdp.feature.session.RdpProfile
 import com.freerdp.feature.session.ToolbarAction
+import com.freerdp.feature.session.keyboard.DefaultKeyboardTimingManager
+import com.freerdp.feature.session.keyboard.KeyboardTimingManager
 import com.freerdp.feature.telemetry.display.DynamicLayoutListener
 import com.freerdp.feature.telemetry.metrics.TelemetryCollector
 import com.freerdp.feature.telemetry.pacer.FramePacer
@@ -95,7 +97,8 @@ class SessionViewModel(
     private val layoutDebounceMs: Long = 250L,
     private val dropSettleDelayMs: Long = 250L,
     private val certificateDecisionTimeoutMs: Long = 25_000L,
-    private val initialProfileId: String? = null
+    private val initialProfileId: String? = null,
+    keyboardTimingManagerOverride: KeyboardTimingManager? = null
 ) : ViewModel() {
 
     // ------------------------------------------------------------------ scopes
@@ -153,6 +156,30 @@ class SessionViewModel(
     val modifierStates: StateFlow<Map<ModifierKey, LatchState>> = _modifierStates.asStateFlow()
 
     val toolbarState: StateFlow<com.freerdp.feature.session.ToolbarState> get() = toolbar.state
+
+    val keyboardTimingManager: KeyboardTimingManager =
+        keyboardTimingManagerOverride ?: DefaultKeyboardTimingManager(engine)
+
+    private val _isTouchpadMode = MutableStateFlow(settings.current.touchpadDefault)
+    val isTouchpadMode: StateFlow<Boolean> = _isTouchpadMode.asStateFlow()
+
+    fun togglePointerMode() {
+        setTouchpadMode(!_isTouchpadMode.value)
+    }
+
+    fun setTouchpadMode(enabled: Boolean) {
+        _isTouchpadMode.value = enabled
+        mouseController?.setTouchpadMode(enabled)
+        mouseController?.setCursorVisible(enabled)
+    }
+
+    fun sendPacedKeyboardText(text: String) {
+        keyboardTimingManager.sendTextWithPacing(text)
+    }
+
+    fun sendPacedKeyboardBackspace() {
+        keyboardTimingManager.sendBackspaceKey()
+    }
 
     // ------------------------------------------------------------- frame slot
 
@@ -447,7 +474,10 @@ class SessionViewModel(
     // -------------------------------------------------------------- modifiers
 
     init {
-        modifierMachine = ModifierStateMachine(engine)
+        modifierMachine = ModifierStateMachine(engine) { _, _ ->
+            _modifierStates.value = modifierMachine.statesFlow.value
+        }
+        _modifierStates.value = modifierMachine.statesFlow.value
         _hudVisible.value = settings.current.hudEnabled
 
         engine.setEventListener(engineListener)
@@ -627,6 +657,7 @@ class SessionViewModel(
         clipboard.stopListening()
         engine.setEventListener(null)
         toolbar.onSessionLost()
+        (keyboardTimingManager as? DefaultKeyboardTimingManager)?.shutdown()
         // Leak guard (latency_perf handoff §4): the reconnect manager's engine-state
         // observer runs in a component-owned scope that rootJob.cancel() cannot reach —
         // shutdown() is the only way to end it. Idempotent.
@@ -682,10 +713,12 @@ class SessionViewModel(
 
     fun onModifierTapped(key: ModifierKey) {
         modifierMachine.onModifierKeyTapped(key)
+        _modifierStates.value = modifierMachine.statesFlow.value
     }
 
     fun onMacro(macro: MacroAction) {
         modifierMachine.triggerMacro(macro)
+        _modifierStates.value = modifierMachine.statesFlow.value
     }
 
     fun onKeyboardText(text: String) {
@@ -713,7 +746,11 @@ class SessionViewModel(
         gestureEngineFactory(listener)
 
     fun createMouseController(transformer: CoordinateTransformer, hapticTarget: View?): HapticMouseController {
-        return mouseControllerFactory(engine, transformer, hapticTarget).also { mouseController = it }
+        return mouseControllerFactory(engine, transformer, hapticTarget).also {
+            it.setTouchpadMode(_isTouchpadMode.value)
+            it.setCursorVisible(_isTouchpadMode.value)
+            mouseController = it
+        }
     }
 
     // --------------------------------------------------------------- messages ---

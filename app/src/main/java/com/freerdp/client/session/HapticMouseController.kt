@@ -73,7 +73,8 @@ class HapticMouseController(
     }
 
     /** Relative touchpad movement (no haptics — motion is continuous). */
-    fun handleTouchpadMove(deltaX: Float, deltaY: Float) = delegate.handleTouchpadMove(deltaX, deltaY)
+    fun handleTouchpadMove(deltaX: Float, deltaY: Float, accelerate: Boolean = true) =
+        delegate.handleTouchpadMove(deltaX, deltaY, accelerate)
 
     fun handleHorizontalScroll(screenX: Float, screenY: Float, deltaX: Float) =
         delegate.handleHorizontalScroll(screenX, screenY, deltaX)
