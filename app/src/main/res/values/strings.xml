@@ -1,0 +1,133 @@
+<resources>
+    <!-- App & Home -->
+    <string name="app_name">RDP Client</string>
+    <string name="title_home">Remote Desktops</string>
+    <string name="action_add_desktop">Add Desktop</string>
+    <string name="action_new_connection">New Connection</string>
+    <string name="action_quick_connect">Quick Connect</string>
+    <string name="action_search">Search Desktops</string>
+    <string name="action_sort">Sort by</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_more_options">More options…</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_save_and_connect">Save &amp; Connect</string>
+    <string name="action_undo">UNDO</string>
+
+    <!-- Sort Options -->
+    <string name="sort_name">Name (A-Z)</string>
+    <string name="sort_date_added">Date Added</string>
+    <string name="sort_last_connected">Last Connected</string>
+    <string name="sort_most_used">Most Used</string>
+
+    <!-- Card Context Menu -->
+    <string name="action_edit">Edit</string>
+    <string name="action_duplicate">Duplicate</string>
+    <string name="action_wake_on_lan">Wake-on-LAN</string>
+    <string name="action_delete">Delete</string>
+
+    <!-- Badges -->
+    <string name="badge_gateway">GW</string>
+    <string name="badge_wol">WOL</string>
+    <string name="desc_saved_password">Saved Password</string>
+
+    <!-- Empty State -->
+    <string name="empty_state_headline">No Desktops Saved</string>
+    <string name="empty_state_description">Add a remote connection profile to easily connect to your Windows PC or virtual desktop.</string>
+    <string name="empty_search_headline">No Desktops Found</string>
+    <string name="empty_search_description">No connections match \"%1$s\".</string>
+    <string name="action_clear_search">Clear Search</string>
+
+    <!-- Feedback & Dialogs -->
+    <string name="dialog_delete_title">Delete Connection?</string>
+    <string name="dialog_delete_message">Are you sure you want to delete \"%1$s\"?</string>
+    <string name="msg_profile_deleted">Deleted \"%1$s\"</string>
+    <string name="msg_profile_duplicated">Duplicated \"%1$s\"</string>
+    <string name="msg_wol_sent">Wake-on-LAN packet sent to %1$s</string>
+    <string name="msg_wol_not_configured">Wake-on-LAN is not configured for this desktop.</string>
+    <string name="time_never_connected">Never connected</string>
+    <string name="time_last_connected">Last connected: %1$s</string>
+
+    <!-- Titles -->
+    <string name="title_profile_editor_new">New Connection</string>
+    <string name="title_profile_editor_edit">Edit Connection</string>
+    <string name="dialog_quick_connect_title">Quick Connect</string>
+    <string name="dialog_quick_connect_subtitle">Connect immediately to an RDP server</string>
+
+    <!-- Sections -->
+    <string name="section_general_connection">General &amp; Connection</string>
+    <string name="section_display_graphics">Display &amp; Graphics</string>
+    <string name="section_audio_input">Audio &amp; Input</string>
+    <string name="section_advanced_networking">Advanced Networking</string>
+
+    <!-- Fields -->
+    <string name="field_profile_name">Profile Name (e.g. My Work PC)</string>
+    <string name="field_host">Host / Server Address *</string>
+    <string name="field_host_required">Host / Server Address *</string>
+    <string name="field_port">Port</string>
+    <string name="default_rdp_port">3389</string>
+    <string name="field_domain_optional">Domain (Optional)</string>
+    <string name="field_username">Username</string>
+    <string name="field_password">Password</string>
+    <string name="field_security_mode">Security Negotiation</string>
+    <string name="field_resolution_mode">Resolution Mode</string>
+    <string name="field_custom_width">Width (px)</string>
+    <string name="field_custom_height">Height (px)</string>
+    <string name="field_color_depth">Color Depth</string>
+    <string name="field_desktop_scale">Desktop Scale</string>
+    <string name="field_audio_redirection">Audio Output</string>
+    <string name="field_gesture_style">Gesture Interaction Style</string>
+    <string name="field_screen_orientation">Screen Orientation</string>
+    <string name="field_gateway_host">Gateway Server Address *</string>
+    <string name="field_gateway_domain">Gateway Domain (Optional)</string>
+    <string name="field_gateway_username">Gateway Username</string>
+    <string name="field_gateway_password">Gateway Password</string>
+    <string name="field_wol_mac">Target MAC Address *</string>
+    <string name="helper_wol_mac">Format: 00:11:22:33:44:55</string>
+    <string name="field_wol_broadcast">Broadcast IP Address</string>
+
+    <!-- Switches -->
+    <string name="switch_auto_connect_startup">Connect automatically on app launch</string>
+    <string name="switch_dynamic_resize">Dynamic display resize (MS-RDPEDISP)</string>
+    <string name="desc_dynamic_resize">Dynamically updates Windows desktop resolution when rotating device</string>
+    <string name="switch_redirect_microphone">Enable microphone audio input</string>
+    <string name="switch_button_up_delay">Mouse button-up delay (compatibility mode)</string>
+    <string name="switch_enable_rd_gateway">Use Remote Desktop Gateway (RDGW)</string>
+    <string name="switch_ignore_certificates">Ignore TLS / SSL certificate warnings</string>
+    <string name="switch_enable_wol">Enable Wake-on-LAN (WoL)</string>
+
+    <!-- Dropdown Values -->
+    <string name="security_mode_auto">Auto (Negotiate)</string>
+    <string name="security_mode_nla">NLA (CredSSP)</string>
+    <string name="security_mode_tls">TLS / SSL</string>
+    <string name="security_mode_rdp">RDP (Legacy)</string>
+
+    <string name="resolution_fit_to_screen">Fit to Screen (Dynamic)</string>
+    <string name="resolution_native">Device Native Display</string>
+    <string name="resolution_custom">Custom Resolution (WxH)</string>
+
+    <string name="color_depth_32bpp">32 bpp (True Color)</string>
+    <string name="color_depth_24bpp">24 bpp</string>
+    <string name="color_depth_16bpp">16 bpp (High Color)</string>
+    <string name="color_depth_8bpp">8 bpp (256 Colors)</string>
+
+    <string name="audio_mode_local">Play on this device (Local)</string>
+    <string name="audio_mode_remote">Play on remote computer (Remote)</string>
+    <string name="audio_mode_disabled">Disabled (Do not play)</string>
+
+    <string name="gesture_auto">Auto (Profile default)</string>
+    <string name="gesture_touchscreen">Touchscreen (Direct 1:1)</string>
+    <string name="gesture_touchpad">Touchpad (Relative mouse)</string>
+
+    <string name="orientation_auto">Auto</string>
+    <string name="orientation_portrait">Portrait</string>
+    <string name="orientation_landscape">Landscape</string>
+
+    <!-- Legacy / Status & Feedback Messages -->
+    <string name="status_empty_profiles">No saved desktop connections.\nTap + to add a server profile.</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_connecting">Connecting...</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="error_connection_failed">Connection failed. Check host and credentials.</string>
+</resources>

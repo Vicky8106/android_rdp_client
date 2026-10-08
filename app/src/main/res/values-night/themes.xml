@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RdpClient" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Brand Colors -->
+        <item name="colorPrimary">#9ECAFF</item>
+        <item name="colorOnPrimary">#003257</item>
+        <item name="colorPrimaryContainer">#004A7B</item>
+        <item name="colorOnPrimaryContainer">#D0E4FF</item>
+
+        <item name="colorSecondary">#BAC8DB</item>
+        <item name="colorOnSecondary">#243240</item>
+        <item name="colorSecondaryContainer">#3A4857</item>
+        <item name="colorOnSecondaryContainer">#D6E4F7</item>
+
+        <!-- System & Window Backgrounds -->
+        <item name="android:windowBackground">@color/background_dark</item>
+        <item name="colorSurface">@color/surface_dark</item>
+        <item name="colorOnSurface">@color/on_surface_dark</item>
+        <item name="colorSurfaceVariant">@color/surface_variant_dark</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant_dark</item>
+
+        <item name="android:statusBarColor">@color/surface_dark</item>
+        <item name="android:navigationBarColor">@color/background_dark</item>
+    </style>
+</resources>

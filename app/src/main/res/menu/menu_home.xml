@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Search Action -->
+    <item
+        android:id="@+id/action_search"
+        android:icon="@drawable/ic_search"
+        android:title="@string/action_search"
+        app:actionViewClass="androidx.appcompat.widget.SearchView"
+        app:showAsAction="ifRoom|collapseActionView" />
+
+    <!-- Sort Options Action -->
+    <item
+        android:id="@+id/action_sort"
+        android:icon="@drawable/ic_sort"
+        android:title="@string/action_sort"
+        app:showAsAction="ifRoom">
+        <menu>
+            <group
+                android:id="@+id/group_sort"
+                android:checkableBehavior="single">
+                <item
+                    android:id="@+id/sort_by_name"
+                    android:checked="true"
+                    android:title="@string/sort_name" />
+                <item
+                    android:id="@+id/sort_by_date_added"
+                    android:title="@string/sort_date_added" />
+                <item
+                    android:id="@+id/sort_by_last_connected"
+                    android:title="@string/sort_last_connected" />
+                <item
+                    android:id="@+id/sort_by_most_used"
+                    android:title="@string/sort_most_used" />
+            </group>
+        </menu>
+    </item>
+
+    <!-- Quick Connect Action -->
+    <item
+        android:id="@+id/action_quick_connect"
+        android:icon="@drawable/ic_flash_on"
+        android:title="@string/action_quick_connect"
+        app:showAsAction="never" />
+
+    <!-- Settings Action -->
+    <item
+        android:id="@+id/action_settings"
+        android:icon="@drawable/ic_settings"
+        android:title="@string/action_settings"
+        app:showAsAction="never" />
+
+</menu>

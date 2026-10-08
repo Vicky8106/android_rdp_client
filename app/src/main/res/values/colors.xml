@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Brand Palette (AVNC Slate & Blue) -->
+    <color name="primary">#00629E</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="primary_container">#D0E4FF</color>
+    <color name="on_primary_container">#001D35</color>
+
+    <!-- Secondary Palette -->
+    <color name="secondary">#526070</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="secondary_container">#D6E4F7</color>
+    <color name="on_secondary_container">#0F1D2A</color>
+
+    <!-- Neutral & Surface (Light Theme) -->
+    <color name="background_light">#F8F9FA</color>
+    <color name="on_background_light">#191C1E</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="on_surface_light">#191C1E</color>
+    <color name="surface_variant_light">#DFE3EB</color>
+    <color name="on_surface_variant_light">#43474E</color>
+
+    <!-- Neutral & Surface (Dark Theme) -->
+    <color name="background_dark">#121212</color>
+    <color name="on_background_dark">#E2E2E6</color>
+    <color name="surface_dark">#1E1E1E</color>
+    <color name="on_surface_dark">#E2E2E6</color>
+    <color name="surface_variant_dark">#2C2C2E</color>
+    <color name="on_surface_variant_dark">#C3C7D0</color>
+
+    <!-- Feedback & Status Indicators -->
+    <color name="error">#BA1A1A</color>
+    <color name="on_error">#FFFFFF</color>
+    <color name="status_connected">#2E7D32</color>
+    <color name="status_connecting">#F57F17</color>
+    <color name="status_disconnected">#C62828</color>
+</resources>

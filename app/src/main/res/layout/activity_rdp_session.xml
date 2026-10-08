@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/sessionRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    android:fitsSystemWindows="false">
+
+    <!-- Layer 1: Remote Desktop Viewport (FrameView) -->
+    <com.rdp.client.ui.session.FrameView
+        android:id="@+id/frameView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
+
+    <!-- Optional transparent touch interception overlay -->
+    <View
+        android:id="@+id/inputTouchOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- Layer 2: Jetpack Compose Floating Overlays -->
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/composeOverlayContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Layer 3: Top Collapsible Toolbar Drawer (Zero-Scrim Translucent Menu Drawer) -->
+    <include
+        android:id="@+id/toolbarDrawerLayout"
+        layout="@layout/layout_toolbar_drawer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top" />
+
+    <!-- Layer 4: Session Status / Connection Loading & Error Overlay -->
+    <include
+        android:id="@+id/statusOverlayLayout"
+        layout="@layout/layout_session_status"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="visible" />
+
+</FrameLayout>

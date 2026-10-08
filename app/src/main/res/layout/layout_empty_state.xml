@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/layoutEmptyRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="32dp">
+
+    <!-- Empty State Illustration / Big Icon -->
+    <ImageView
+        android:id="@+id/ivEmptyIllustration"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_desktop_windows"
+        app:tint="?attr/colorSurfaceVariant" />
+
+    <!-- Headline -->
+    <TextView
+        android:id="@+id/tvEmptyHeadline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="@string/empty_state_headline"
+        android:textAppearance="?attr/textAppearanceTitleLarge"
+        android:textColor="?attr/colorOnSurface"
+        android:textStyle="bold" />
+
+    <!-- Description -->
+    <TextView
+        android:id="@+id/tvEmptyDescription"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:maxWidth="280dp"
+        android:text="@string/empty_state_description"
+        android:textAppearance="?attr/textAppearanceBodyMedium"
+        android:textColor="?attr/colorOnSurfaceVariant" />
+
+    <!-- Action Buttons Container -->
+    <LinearLayout
+        android:id="@+id/layoutEmptyActions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <!-- Add Desktop Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEmptyAddProfile"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="200dp"
+            android:text="@string/action_add_desktop"
+            app:icon="@drawable/ic_add" />
+
+        <!-- Quick Connect Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEmptyQuickConnect"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minWidth="200dp"
+            android:text="@string/action_quick_connect"
+            app:icon="@drawable/ic_flash_on" />
+
+        <!-- Clear Search Query Button (shown only when searching) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEmptyClearSearch"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/action_clear_search"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+    </LinearLayout>
+
+</LinearLayout>

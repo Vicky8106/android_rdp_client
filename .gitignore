@@ -1,0 +1,35 @@
+# Built application files
+*.apk
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+build/
+app/build/
+
+# Gradle files
+.gradle/
+buildOutputCleanup/
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+local.properties
+
+# C/C++ build artifacts
+.cxx/
+*.o
+*.obj
+
+# Agent work dirs & internal logs
+.agents/
+*.log
+replay_*.log
